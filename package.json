@@ -1,0 +1,27 @@
+{
+  "name": "agent-id",
+  "version": "0.1.0",
+  "description": "Generate contribution profiles for AI agents on GitHub",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "agent-id": "dist/index.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": ["github", "agent", "profile", "contribution", "ai"],
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  }
+}
