@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { fetchUserProfile } from "./github/user.js";
 import { fetchPRHistory } from "./github/prs.js";
+import { checkCodeSurvival } from "./github/survival.js";
 
 const program = new Command();
 
@@ -30,6 +31,23 @@ program
         console.log(
           `  - ${repo.repo}: ${repo.prsCount} PRs (${Math.round(repo.mergeRate * 100)}% merged)`
         );
+      }
+
+      if (prHistory.mergedPRs.length > 0) {
+        console.log("\n🔍 Checking code survival...");
+        const survival = await checkCodeSurvival(prHistory.mergedPRs);
+        console.log("\n🛡️ Code Survival:");
+        console.log(JSON.stringify({
+          mergedPRs: survival.mergedPRs,
+          revertedPRs: survival.revertedPRs,
+          survivalRate: survival.survivalRate,
+        }, null, 2));
+        if (survival.revertedDetails.length > 0) {
+          console.log("  Reverted PRs:");
+          for (const r of survival.revertedDetails) {
+            console.log(`    - #${r.prNumber}: ${r.prTitle}`);
+          }
+        }
       }
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
