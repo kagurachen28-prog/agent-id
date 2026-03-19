@@ -36,6 +36,11 @@ const BOT_USERNAME_PATTERNS = [
   /snyk/i,
   /codecov/i,
   /github-actions/i,
+  /copilot/i,
+  /ai$/i,          // ends with "ai": coderabbitai, deepseekai
+  /^ai-/i,         // starts with "ai-"
+  /-agent$/i,      // ends with "-agent"
+  /assistant/i,
 ];
 
 function detectBotSignals(user: GitHubUser): string[] {
