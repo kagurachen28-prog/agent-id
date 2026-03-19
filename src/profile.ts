@@ -187,9 +187,11 @@ export async function generateProfile(
     },
 
     reviewPatterns: {
-      commonIssues: reviews.commonIssues.map((i) => i.category),
+      commonIssues: reviews.commonIssues.map((i) => `${i.category} (${i.count})`),
       correctionRate: reviews.correctionRate,
       repeatOffenses: reviews.repeatOffenses,
+      totalReviewComments: reviews.totalReviewComments,
+      sampleSize: reviews.sampleSize,
     },
 
     contributionTypes,

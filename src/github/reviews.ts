@@ -104,43 +104,94 @@ function categorizeComment(body: string): string[] {
   return categories.length > 0 ? categories : ["other"];
 }
 
+interface PRReview {
+  id: number;
+  user: { login: string };
+  state: string;
+  body: string;
+  submitted_at: string;
+}
+
+interface IssueComment {
+  id: number;
+  user: { login: string };
+  body: string;
+  created_at: string;
+}
+
 async function fetchPRReviewComments(
   repo: string,
   prNumber: number,
   author: string
 ): Promise<{ comments: ReviewComment[]; hadFixCommit: boolean }> {
   try {
-    // Fetch review comments (inline code review comments)
-    const comments = await githubFetchJson<ReviewComment[]>(
-      `/repos/${repo}/pulls/${prNumber}/comments?per_page=100`
-    );
+    const allFeedback: ReviewComment[] = [];
 
-    // Filter to comments NOT by the PR author (these are reviewer feedback)
-    const reviewerComments = comments.filter(
-      (c) => c.user.login !== author
-    );
+    // 1. Inline code review comments (e.g. line-level suggestions)
+    try {
+      const inlineComments = await githubFetchJson<ReviewComment[]>(
+        `/repos/${repo}/pulls/${prNumber}/comments?per_page=100`
+      );
+      for (const c of inlineComments) {
+        if (c.user.login !== author) allFeedback.push(c);
+      }
+    } catch { /* ignore */ }
 
-    // Check if there was a commit after the first review comment (suggests fix)
+    // 2. PR reviews (CodeRabbit posts review summaries here)
+    try {
+      const reviews = await githubFetchJson<PRReview[]>(
+        `/repos/${repo}/pulls/${prNumber}/reviews?per_page=100`
+      );
+      for (const r of reviews) {
+        if (r.user.login !== author && r.body && r.body.trim().length > 10) {
+          allFeedback.push({
+            id: r.id,
+            body: r.body,
+            created_at: r.submitted_at,
+            user: r.user,
+            html_url: "",
+          });
+        }
+      }
+    } catch { /* ignore */ }
+
+    // 3. Issue comments (some bots post feedback as issue comments)
+    try {
+      const issueComments = await githubFetchJson<IssueComment[]>(
+        `/repos/${repo}/issues/${prNumber}/comments?per_page=100`
+      );
+      for (const c of issueComments) {
+        if (c.user.login !== author) {
+          allFeedback.push({
+            id: c.id,
+            body: c.body,
+            created_at: c.created_at,
+            user: c.user,
+            html_url: "",
+          });
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Check if there was a commit after the first review feedback (suggests fix)
     let hadFixCommit = false;
-    if (reviewerComments.length > 0) {
-      const firstReviewTime = new Date(
-        reviewerComments[0].created_at
-      ).getTime();
+    if (allFeedback.length > 0) {
+      const sortedFeedback = allFeedback.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      const firstReviewTime = new Date(sortedFeedback[0].created_at).getTime();
 
       try {
         const commits = await githubFetchJson<PRCommit[]>(
           `/repos/${repo}/pulls/${prNumber}/commits?per_page=100`
         );
         hadFixCommit = commits.some(
-          (c) =>
-            new Date(c.commit.author.date).getTime() > firstReviewTime
+          (c) => new Date(c.commit.author.date).getTime() > firstReviewTime
         );
-      } catch {
-        // Ignore
-      }
+      } catch { /* ignore */ }
     }
 
-    return { comments: reviewerComments, hadFixCommit };
+    return { comments: allFeedback, hadFixCommit };
   } catch {
     return { comments: [], hadFixCommit: false };
   }
