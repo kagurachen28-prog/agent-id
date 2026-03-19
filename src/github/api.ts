@@ -1,3 +1,11 @@
+import {
+  getCachedResponse,
+  setCachedResponse,
+  cacheDisabled,
+  ttlMultiplier,
+  TTL,
+} from "../cache.js";
+
 const GITHUB_API = "https://api.github.com";
 
 function getHeaders(): Record<string, string> {
@@ -10,6 +18,15 @@ function getHeaders(): Record<string, string> {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+}
+
+/**
+ * Determine TTL for a given URL.
+ * /users/<name> → 1 hour; everything else (PRs, reviews, commits, search) → 6 hours.
+ */
+function ttlForUrl(url: string): number {
+  if (/\/users\/[^/]+$/.test(url)) return TTL.USER_PROFILE * ttlMultiplier;
+  return TTL.PR_REVIEW_DATA * ttlMultiplier;
 }
 
 export async function githubFetch(path: string): Promise<Response> {
@@ -40,8 +57,19 @@ export async function githubFetch(path: string): Promise<Response> {
 }
 
 export async function githubFetchJson<T>(path: string): Promise<T> {
+  const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
+
+  if (!cacheDisabled) {
+    const cached = getCachedResponse(url, ttlForUrl(url));
+    if (cached !== null) return JSON.parse(cached) as T;
+  }
+
   const res = await githubFetch(path);
-  return res.json() as Promise<T>;
+  const text = await res.text();
+
+  setCachedResponse(url, text);
+
+  return JSON.parse(text) as T;
 }
 
 /**
@@ -56,24 +84,48 @@ export async function githubFetchAllPages<T>(path: string, maxPages = 10): Promi
   let page = 0;
 
   while (url && page < maxPages) {
+    // Check cache for this specific page URL
+    if (!cacheDisabled) {
+      const cached = getCachedResponse(url, ttlForUrl(url));
+      if (cached !== null) {
+        const data = JSON.parse(cached);
+        // For cached responses we lose Link headers, so we store a wrapper
+        if (data.__items && data.__nextUrl !== undefined) {
+          if (Array.isArray(data.__items)) {
+            results.push(...data.__items);
+          }
+          url = data.__nextUrl;
+          page++;
+          continue;
+        }
+      }
+    }
+
     const res = await githubFetch(url);
     const data = await res.json();
 
+    let items: T[] = [];
     if (Array.isArray(data)) {
-      results.push(...data);
+      items = data;
     } else if (data.items && Array.isArray(data.items)) {
-      results.push(...data.items);
+      items = data.items;
     }
+    results.push(...items);
 
     // Parse Link header for next page
     const link = res.headers.get("Link");
-    url = null;
+    let nextUrl: string | null = null;
     if (link) {
       const nextMatch = link.match(/<([^>]+)>;\s*rel="next"/);
       if (nextMatch) {
-        url = nextMatch[1];
+        nextUrl = nextMatch[1];
       }
     }
+
+    // Cache this page with its items and next URL
+    setCachedResponse(url, JSON.stringify({ __items: items, __nextUrl: nextUrl }));
+
+    url = nextUrl;
     page++;
   }
 

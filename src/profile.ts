@@ -2,6 +2,15 @@ import { fetchUserProfile, type UserProfile } from "./github/user.js";
 import { fetchPRHistory, type PRHistoryResult, type MergedPR } from "./github/prs.js";
 import { checkCodeSurvival, type CodeSurvivalResult } from "./github/survival.js";
 import { analyzeReviewPatterns, type ReviewPatternsResult } from "./github/reviews.js";
+import {
+  getCachedProfile,
+  setCachedProfile,
+  disableCache,
+  setTtlMultiplier,
+  TTL,
+  cacheDisabled,
+  ttlMultiplier,
+} from "./cache.js";
 
 export interface AgentProfile {
   // Identity
@@ -120,9 +129,26 @@ function classifyContributions(
 
 export async function generateProfile(
   username: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  options?: { noCache?: boolean; cacheTtlMinutes?: number }
 ): Promise<AgentProfile> {
   const log = onProgress || (() => {});
+
+  // Apply cache settings
+  if (options?.noCache) disableCache();
+  if (options?.cacheTtlMinutes != null) {
+    setTtlMultiplier(options.cacheTtlMinutes / 60);
+  }
+
+  // Check profile cache
+  if (!cacheDisabled) {
+    const profileTtl = TTL.PROFILE * ttlMultiplier;
+    const cached = getCachedProfile(username, profileTtl);
+    if (cached !== null) {
+      log("Using cached profile");
+      return JSON.parse(cached) as AgentProfile;
+    }
+  }
 
   log("Fetching user profile...");
   const user = await fetchUserProfile(username);
@@ -162,7 +188,7 @@ export async function generateProfile(
   // so classify based on merged PRs
   const contributionTypes = classifyContributions(allPRTitles);
 
-  return {
+  const profile: AgentProfile = {
     github: user.github,
     accountAge: user.accountAgeDays,
     isLikelyBot: user.isLikelyBot,
@@ -206,4 +232,9 @@ export async function generateProfile(
     generatedAt: new Date().toISOString(),
     version: "0.1.0",
   };
+
+  // Cache the generated profile
+  setCachedProfile(username, JSON.stringify(profile));
+
+  return profile;
 }

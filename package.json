@@ -13,15 +13,23 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["github", "agent", "profile", "contribution", "ai"],
+  "keywords": [
+    "github",
+    "agent",
+    "profile",
+    "contribution",
+    "ai"
+  ],
   "license": "MIT",
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "esbuild": "^0.25.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "commander": "^13.0.0"
   }
 }
