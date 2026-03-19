@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { generateProfile } from "./profile.js";
+import { startServer } from "./server.js";
 
 const program = new Command();
 
@@ -37,6 +38,19 @@ program
       console.error(`❌ Error: ${err.message}`);
       process.exit(1);
     }
+  });
+
+program
+  .command("serve")
+  .description("Start the HTTP API server")
+  .option("-p, --port <port>", "Port to listen on", "3000")
+  .action((opts: { port: string }) => {
+    const port = parseInt(opts.port, 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      console.error("❌ Invalid port number");
+      process.exit(1);
+    }
+    startServer(port);
   });
 
 program.parse();
