@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { fetchUserProfile } from "./github/user.js";
 import { fetchPRHistory } from "./github/prs.js";
 import { checkCodeSurvival } from "./github/survival.js";
+import { analyzeReviewPatterns } from "./github/reviews.js";
 
 const program = new Command();
 
@@ -48,6 +49,16 @@ program
             console.log(`    - #${r.prNumber}: ${r.prTitle}`);
           }
         }
+
+        console.log("\n💬 Analyzing review feedback...");
+        const reviews = await analyzeReviewPatterns(prHistory.mergedPRs, username);
+        console.log("\n🔄 Review Patterns:");
+        console.log(JSON.stringify({
+          totalReviewComments: reviews.totalReviewComments,
+          correctionRate: reviews.correctionRate,
+          repeatOffenses: reviews.repeatOffenses,
+          commonIssues: reviews.commonIssues.slice(0, 5),
+        }, null, 2));
       }
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
